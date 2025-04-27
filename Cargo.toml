@@ -1,0 +1,18 @@
+[workspace]
+members = [
+    "server",
+    "client", 
+    "java_native",
+    "testexe"]
+
+[workspace.dependencies]
+windows = { version = "0.61.1", features = [
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Pipes",
+    "Win32_System_IO",
+    "Win32_System_LibraryLoader"
+]}
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
