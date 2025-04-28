@@ -7,3 +7,4 @@ edition = "2024"
 windows = { workspace = true }
 tokio = { workspace = true }
 futures = { workspace = true }
+tokio_kcp = "0.9.8"

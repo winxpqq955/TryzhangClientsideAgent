@@ -4,7 +4,7 @@ members = [
     "client", 
     "java_native",
     "testexe"]
-
+resolver = "3"
 [workspace.dependencies]
 windows = { version = "0.61.1", features = [
     "Win32_Foundation",

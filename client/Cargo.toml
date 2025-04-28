@@ -1,9 +1,10 @@
 [package]
+edition = "2024"
 name = "client"
 version = "0.1.0"
-edition = "2024"
 
 [dependencies]
-windows = { workspace = true }
-tokio = { workspace = true }
-futures = { workspace = true }
+futures = {workspace = true} 
+tokio = {workspace = true} 
+windows = {workspace = true}
+tokio_kcp = "0.9.8"

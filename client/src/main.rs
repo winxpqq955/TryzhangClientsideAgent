@@ -2,23 +2,28 @@ mod client_core;
 
 use std::error::Error;
 use std::net::SocketAddr;
-use tokio::{net::TcpListener, runtime::Runtime}; // 引入 Runtime 类型
+use tokio::io::AsyncWriteExt;
+use tokio::net::windows::named_pipe::ServerOptions;
+use tokio::{net::TcpListener, runtime::Runtime};
+// 引入 Runtime 类型
 
-use windows::{
-    Win32::Foundation::*, Win32::Storage::FileSystem::*, Win32::System::Pipes::*, core::*,
-};
+use windows::core::w;
+use windows::{Win32::Foundation::*, Win32::Storage::FileSystem::*, Win32::System::Pipes::*};
 
 // 这是同步的 main 函数，没有 #[tokio::main] 宏
-fn main() -> std::result::Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     let rt = Runtime::new()?;
 
     let listener2 = rt.block_on(async { TcpListener::bind("127.0.0.1:0").await })?;
     let listener = rt.block_on(async { TcpListener::bind("127.0.0.1:0").await })?;
-    let _ = pipe_listener(
-        listener2.local_addr()?.port(),
-        listener.local_addr()?.port(),
-    );
-    // 从环境变量或命令行参数获取代理服务器地址
+    // rt.block_on(async {
+    //     new_pipes_server(
+    //         listener2.local_addr().unwrap().port(),
+    //         listener.local_addr().unwrap().port(),
+    //     )
+    //     .await
+    // });
+
     let server_addr = "127.0.0.1:8080"; // 反向代理服务器地址
     let server_addr: SocketAddr = server_addr.parse()?;
     rt.block_on(client_core::run_client(&listener, server_addr))?;
@@ -28,7 +33,68 @@ fn main() -> std::result::Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn pipe_listener(network_port: u16, forward_port: u16) -> Result<()> {
+const PIPE_NAME: &str = r"\\.\pipe\novoline893";
+
+async fn new_pipes_server(network_port: u16, forward_port: u16) {
+    let server = ServerOptions::new()
+        .first_pipe_instance(true)
+        .create(PIPE_NAME)
+        .unwrap();
+
+    // Spawn the server logic as a task.
+    let server_task = tokio::spawn(async move {
+        // Wait for a client to connect.
+        server.connect().await.unwrap();
+        println!("Pipe client connected.");
+
+        // Use the connected client instance.
+        let mut client = server;
+
+        // Write the ports information.
+        let message = format!("{},{}", network_port, forward_port);
+        client.write_all(message.as_bytes()).await.unwrap();
+        println!("Sent ports to pipe client: {}", message);
+
+        // Loop to read messages from the client.
+        let mut buffer = [0u8; 512];
+        loop {
+            match client.try_read(&mut buffer) {
+                Ok(0) => {
+                    // Connection closed by client.
+                    println!("Pipe client disconnected before sending 'goodguys'.");
+                    break; // Exit the read loop
+                }
+                Ok(n) => {
+                    let received_message = String::from_utf8_lossy(&buffer[..n]);
+                    println!("Received from pipe client: {}", received_message);
+                    if received_message == "goodguys" {
+                        println!("'goodguys' received. Closing pipe connection.");
+                        // Optional: Flush and shutdown can be added if needed.
+                        // client.flush().await.unwrap();
+                        // client.shutdown().await.unwrap();
+                        break; // Exit the read loop
+                    }
+                    // If not "goodguys", continue reading.
+                }
+                Err(e) => {
+                    eprintln!("Failed to read from pipe: {}", e);
+                    break; // Exit on error
+                }
+            }
+        }
+        // The client instance (pipe connection) is dropped here.
+        println!("Pipe connection handling finished.");
+        // Return a value or () from the task.
+    });
+
+    // Wait for the spawned task to complete. This makes `new_pipes_server` block.
+    if let Err(e) = server_task.await {
+        eprintln!("Pipe server task panicked or was cancelled: {}", e);
+    } else {
+        println!("Pipe server task completed successfully.");
+    }
+}
+fn pipe_listener(network_port: u16, forward_port: u16) -> Result<(), Box<dyn Error>> {
     unsafe {
         let pipe_name = w!("\\\\.\\pipe\\novoline893"); // 使用宽字符宏定义管道名称
         println!(
