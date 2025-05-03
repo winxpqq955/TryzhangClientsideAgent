@@ -1,11 +1,20 @@
 use once_cell::sync::OnceCell;
 use windows::{
-    Win32::Foundation::*, Win32::Storage::FileSystem::*, Win32::System::Pipes::*, core::*,
+    Win32::Foundation::*, Win32::Storage::FileSystem::*, Win32::System::Pipes::*,
 };
+use anyhow::{Result, Error};
+use tokio::net::windows::named_pipe::ClientOptions;
+use windows::core::w;
 
 static NETWORK_PORT: OnceCell<u16> = OnceCell::new();
 static FORWARD_PORT: OnceCell<u16> = OnceCell::new();
-
+const PIPE_NAME: &str = r"\\.\pipe\novoline893";
+fn aaaaaa() {
+    match ClientOptions::new().open(PIPE_NAME) {
+        Ok(_) => {}
+        Err(_) => {}
+    };
+}
 fn pipe() -> Result<Vec<u16>> {
     let pipe_name = w!("\\\\.\\pipe\\novoline893");
     unsafe {

@@ -5,3 +5,5 @@ edition = "2024"
 
 [dependencies]
 windows = { workspace = true }
+tokio = {workspace = true}
+once_cell = "1.21.3"

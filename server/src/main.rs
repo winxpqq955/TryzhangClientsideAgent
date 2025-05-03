@@ -6,7 +6,7 @@ use std::net::SocketAddr;
 use tokio::runtime::Runtime;
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let listen_addr = "127.0.0.1:8080";
+    let listen_addr = "0.0.0.0:19132";
     let backend_addr = "127.0.0.1:25565";
 
     let listen_addr: SocketAddr = listen_addr.parse()?;

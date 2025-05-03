@@ -1,13 +1,99 @@
 // 声明这个模块需要使用外部 crates
 use futures::try_join;
+use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
+use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::net::SocketAddr;
-use tokio::io::{self};
+use tokio::io::{self, AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 use tokio_kcp::{KcpConfig, KcpListener, KcpStream}; // 移除 UdpSocket，tokio-kcp 会处理
 
+// JWT声明结构体
+#[derive(Debug, Serialize, Deserialize)]
+struct Claims {
+    sub: String, // 主题 (通常是用户ID)
+    exp: usize,  // 过期时间 (Unix时间戳)
+                 // 可以根据需要添加更多字段
+}
+
+// 定义JWT验证错误
+#[derive(Debug)]
+enum AuthError {
+    InvalidToken,
+    TokenExpired,
+    IoError(io::Error),
+}
+
+impl From<io::Error> for AuthError {
+    fn from(err: io::Error) -> Self {
+        AuthError::IoError(err)
+    }
+}
+
+impl From<jsonwebtoken::errors::Error> for AuthError {
+    fn from(_: jsonwebtoken::errors::Error) -> Self {
+        AuthError::InvalidToken
+    }
+}
+
+// 验证JWT令牌
+fn validate_token(token: &str) -> Result<Claims, AuthError> {
+    // 在实际应用中，这个密钥应该从安全的配置中获取
+    let secret = b"your_secret_key";
+
+    let validation = Validation::new(Algorithm::HS256);
+    let token_data = decode::<Claims>(token, &DecodingKey::from_secret(secret), &validation)?;
+
+    Ok(token_data.claims)
+}
+
 // 异步函数：处理单个 KCP 客户端连接和 TCP 后端连接之间的数据转发
-async fn handle_server_connection(client_stream: KcpStream, backend_addr: SocketAddr) {
+async fn handle_server_connection(mut client_stream: KcpStream, backend_addr: SocketAddr) {
+    // 首先读取并验证JWT令牌
+    let auth_result = authenticate_client(&mut client_stream).await;
+
+    match auth_result {
+        Ok(claims) => {
+            println!("Server: Authentication successful for user: {}", claims.sub);
+            // 继续处理连接
+            process_connection(client_stream, backend_addr).await;
+        }
+        Err(e) => {
+            match e {
+                AuthError::InvalidToken => eprintln!("Server: Invalid JWT token"),
+                AuthError::TokenExpired => eprintln!("Server: JWT token expired"),
+                AuthError::IoError(e) => eprintln!("Server: IO error during authentication: {}", e),
+            }
+            // 不处理连接，函数返回后连接会被关闭
+        }
+    }
+}
+
+// 验证客户端身份
+async fn authenticate_client(client_stream: &mut KcpStream) -> Result<Claims, AuthError> {
+    // 读取JWT令牌长度 (4字节)
+    let mut len_bytes = [0u8; 4];
+    client_stream.read_exact(&mut len_bytes).await?;
+    let token_len = u32::from_be_bytes(len_bytes) as usize;
+
+    // 读取JWT令牌
+    let mut token_bytes = vec![0u8; token_len];
+    client_stream.read_exact(&mut token_bytes).await?;
+
+    // 转换为字符串
+    let token = String::from_utf8(token_bytes).map_err(|_| AuthError::InvalidToken)?;
+
+    // 验证令牌
+    let claims = validate_token(&token)?;
+
+    // 发送验证成功响应
+    client_stream.write_all(&[1u8]).await?;
+
+    Ok(claims)
+}
+
+// 处理已验证的连接
+async fn process_connection(client_stream: KcpStream, backend_addr: SocketAddr) {
     // 连接到后端服务 (仍然使用 TCP)
     let mut backend_stream = match TcpStream::connect(&backend_addr).await {
         Ok(stream) => stream,

@@ -8,5 +8,7 @@ crate-type = ["cdylib"]
 
 [dependencies]
 windows = { workspace = true }
+tokio = {workspace = true}
 jni = { git = "https://github.com/jni-rs/jni-rs" }
 once_cell = "1.21.3"
+anyhow = "1.0.98"
