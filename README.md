@@ -1,6 +1,6 @@
 # ClientsideAgent
 
-使用Forge TransformationService一个 bootstrap-native 用于启动子进程 agent.exe, 实现劫持modlauncher, mc与agent双向心跳, 修改进服IP(WIP)
+使用Forge TransformationService 加载 bootstrap-native 用于启动子进程 agent.exe, 实现劫持modlauncher, mc与agent双向心跳, 修改进服IP(WIP)
 
 agent.exe 主要功能是一个反向代理客户端, 首先会随机获取两个未被使用的端口 然后使用windows管道与bootstrap-native通讯 告诉bootstrap-native游戏转发的端口和与agent.exe的端口
 
